@@ -236,12 +236,12 @@ contract GlobalTradeSystem {
         emit TradeOfferModify(_taker, TradeOfferState.TAKEN);
     }
     
-    function getMyInventory(address user) external view returns (uint[] memory) {
-        uint[] memory asset_ids = new uint[](assetCount[user]);
+    function getMyInventory() external view returns (uint[] memory) {
+        uint[] memory asset_ids = new uint[](assetCount[msg.sender]);
         uint last = 0;
         for(uint i = 0; i <= last_asset_id; i++)
         {
-            if(assets[i].owner == user)
+            if(assets[i].owner == msg.sender)
             {
                 asset_ids[last++] = i;
             }
