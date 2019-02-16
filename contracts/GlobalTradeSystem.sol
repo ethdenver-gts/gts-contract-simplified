@@ -1,4 +1,4 @@
-pragma solidity ^0.5.0;
+pragma solidity 0.5.1;
 
 contract GlobalTradeSystem {
 
@@ -86,6 +86,7 @@ contract GlobalTradeSystem {
     mapping(uint => TradeOffer) offers; // stores all TradeOffers
     uint last_asset_id;                                 // stores last asset id
     uint last_offer_id;                                 // stores last offer id
+    mapping(address => uint) assetCount;
 
     // ------------------------------------------------------------------------------------------ //
     // INTERNAL FUNCTIONS
@@ -93,6 +94,8 @@ contract GlobalTradeSystem {
 
     // Changes the owner of an Asset    
     function setAssetOwner(uint _id, address _new_owner) internal {
+        assetCount[assets[_id].owner]--;
+        assetCount[_new_owner]++;
         emit AssetMove(_id, assets[_id].owner, _new_owner);
         assets[_id].owner = _new_owner;
     }
@@ -138,6 +141,7 @@ contract GlobalTradeSystem {
     // Assigns a new asset to given address
     function assign(address _owner, bytes32 _data) external {
         last_asset_id++;
+        assetCount[_owner]++;
         assets[last_asset_id] = Asset(_owner, AssetMetadata(msg.sender, _data));
         emit AssetAssign(last_asset_id, _owner, msg.sender, _data);
     }
@@ -150,6 +154,7 @@ contract GlobalTradeSystem {
             "In order to burn an asset, you need to be the one who emitted it."
         );
 
+        assetCount[assets[_id].owner]--;
         delete assets[_id];
         emit AssetBurn(_id);
 
@@ -229,6 +234,32 @@ contract GlobalTradeSystem {
         emit TradeOfferModify(_maker, TradeOfferState.TAKEN);
         offers[_taker].state = TradeOfferState.TAKEN;
         emit TradeOfferModify(_taker, TradeOfferState.TAKEN);
+    }
+    
+    function getMyInventory(address user) external view returns (uint[] memory) {
+        uint[] memory asset_ids = new uint[](assetCount[user]);
+        uint last = 0;
+        for(uint i = 0; i <= last_asset_id; i++)
+        {
+            if(assets[i].owner == user)
+            {
+                asset_ids[last++] = i;
+            }
+        }
+        return asset_ids;
+    }
+    
+    function getUserInventory(address user) external view returns (uint[] memory) {
+        uint[] memory asset_ids = new uint[](assetCount[user]);
+        uint last = 0;
+        for(uint i = 0; i <= last_asset_id; i++)
+        {
+            if(assets[i].owner == user)
+            {
+                asset_ids[last++] = i;
+            }
+        }
+        return asset_ids;
     }
 
 }
