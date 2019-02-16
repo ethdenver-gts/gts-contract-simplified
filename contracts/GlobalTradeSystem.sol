@@ -87,6 +87,7 @@ contract GlobalTradeSystem {
     uint last_asset_id;                                 // stores last asset id
     uint last_offer_id;                                 // stores last offer id
     mapping(address => uint) assetCount;
+    mapping(address => uint[]) inboxedTradeOffers;
 
     // ------------------------------------------------------------------------------------------ //
     // INTERNAL FUNCTIONS
@@ -187,6 +188,9 @@ contract GlobalTradeSystem {
             _their_assets_emitters,
             _their_assets_data
         );
+
+        inboxedTradeOffers[_partner].push(last_offer_id);
+
         return last_offer_id;
     }
 
@@ -247,6 +251,24 @@ contract GlobalTradeSystem {
             }
         }
         return asset_ids;
+    }
+
+    function getMyOffers() external view returns(uint[] memory) {
+        uint[] memory _offers = new uint[](inboxedTradeOffers[address(0)].length + inboxedTradeOffers[msg.sender].length);
+
+        // append addressed offers 
+
+        for(uint i = 0; i < inboxedTradeOffers[msg.sender].length; i++) {
+            _offers[i] = inboxedTradeOffers[msg.sender][i];
+        }
+        
+        // append public offers
+
+        for(uint i = 0; i < inboxedTradeOffers[address(0)].length; i++) {
+            _offers[inboxedTradeOffers[msg.sender].length + i - 1] = inboxedTradeOffers[address(0)][i];
+        }
+
+        return _offers;
     }
     
     function getUserInventory(address user) external view returns (uint[] memory) {
