@@ -1,4 +1,4 @@
-pragma solidity ^0.5.1;
+pragma solidity 0.5.1;
 
 contract GlobalTradeSystem {
 
@@ -10,8 +10,7 @@ contract GlobalTradeSystem {
     enum TradeOfferState {
         PENDING,     // offer is valid and awaits confirmation or rejection
         CANCELLED, // offer was cancelled by the sender
-        ACCEPTED,    // offer was accepted and assets were successfully
-        DECLINED      // offer was declined by recipient
+        TAKEN    // offer was accepted and assets were successfully
     }
 
     // Defines a single asset metadata
@@ -31,8 +30,10 @@ contract GlobalTradeSystem {
     struct TradeOffer {
         address sender;                // sender's address 
         address recipient;         // offer recipient address (0x0 if public)
-        uint[] my_assets;
-        uint[] their_assets;
+        address[] my_assets_emitters;
+        bytes32[] my_assets_data;
+        address[] their_assets_emitters;
+        bytes32[] their_assets_data;
         TradeOfferState state; // offer state
     }
 
@@ -65,8 +66,10 @@ contract GlobalTradeSystem {
         uint id,                                    // id of the offer
         address indexed sender,     // address of the offer's sender
         address indexed receiver, // address of the offer's recipient
-        uint[] my_assets,
-        uint[] their_assets
+        address[] my_assets_emitters,
+        bytes32[] my_assets_data,
+        address[] their_assets_emitters,
+        bytes32[] their_assets_data
     );
     
     // Event fires when a trade offer has been modified
@@ -85,6 +88,7 @@ contract GlobalTradeSystem {
     uint last_offer_id;                                 // stores last offer id
     mapping(address => uint) assetCount;
     mapping(address => uint[]) inboxedTradeOffers;
+    mapping(address => uint[]) outboxedTradeOffers;
 
     // ------------------------------------------------------------------------------------------ //
     // INTERNAL FUNCTIONS
@@ -115,15 +119,19 @@ contract GlobalTradeSystem {
     function getTradeOffer(uint _id) external view returns(
         address sender,
         address recipient,
-        uint[] memory my_assets,
-        uint[] memory their_assets,
+        address[] memory my_assets_emitters,
+        bytes32[] memory my_assets_data,
+        address[] memory their_assets_emitters,
+        bytes32[] memory their_assets_data,
         TradeOfferState state
     ) {
         return (
             offers[_id].sender,
             offers[_id].recipient,
-            offers[_id].my_assets,
-            offers[_id].their_assets,
+            offers[_id].my_assets_emitters,
+            offers[_id].my_assets_data,
+            offers[_id].their_assets_emitters,
+            offers[_id].their_assets_data,
             offers[_id].state
         );
     }
@@ -157,26 +165,33 @@ contract GlobalTradeSystem {
     // Sends a TradeOffer to other user
     function sendTradeOffer(
         address _partner,
-        uint[] calldata _my_assets,
-        uint[] calldata _their_assets
+        address[] calldata _my_assets_emitters,
+        bytes32[] calldata _my_assets_data,
+        address[] calldata _their_assets_emitters,
+        bytes32[] calldata _their_assets_data
     ) external returns(uint) {
         last_offer_id++;
         offers[last_offer_id] = TradeOffer(
             msg.sender,
             _partner,
-            _my_assets,
-            _their_assets,
+            _my_assets_emitters,
+            _my_assets_data,
+            _their_assets_emitters,
+            _their_assets_data,
             TradeOfferState.PENDING
         );
         emit TradeOfferSend(
             last_offer_id,
             msg.sender,
             _partner,
-            _my_assets,
-            _their_assets
+            _my_assets_emitters,
+            _my_assets_data,
+            _their_assets_emitters,
+            _their_assets_data
         );
 
         inboxedTradeOffers[_partner].push(last_offer_id);
+        outboxedTradeOffers[msg.sender].push(last_offer_id);
 
         return last_offer_id;
     }
@@ -192,49 +207,39 @@ contract GlobalTradeSystem {
         );
     }
 
-    // Accepts a TradeOffer with given id
-    function acceptTradeOffer(uint _offer_id) external {
-        require(
-            offers[_offer_id].recipient == msg.sender,
-            "You are not the recipient of given trade offer."
-        );
-        require(
-            offers[_offer_id].state == TradeOfferState.PENDING,
-            "This offer is not pending."
-        );
-        for (uint i = 0; i < offers[_offer_id].my_assets.length; i++) {
-            require(
-                assets[offers[_offer_id].my_assets[i]].owner == offers[_offer_id].sender,
-                "Offer sender no longer owns mentioned assets."
-            );
-            setAssetOwner(offers[_offer_id].my_assets[i], msg.sender);
+    function takeTradeOffer(uint _maker, uint[] calldata _maker_assets, uint _taker, uint[] calldata _taker_assets) external {
+        require(offers[_maker].recipient == address(0) || offers[_maker].recipient == offers[_taker].sender, "Wrong recipient 1");
+        require(offers[_taker].recipient == address(0) || offers[_taker].recipient == offers[_maker].sender, "Wrong recipient 2");
+        for(uint i = 0; i < offers[_maker].my_assets_emitters.length; i++) {
+            require(assets[_maker_assets[i]].owner == offers[_maker].sender, "1 Invalid ownership of maker assets.");
+            require(assets[_maker_assets[i]].metadata.emitter == offers[_maker].my_assets_emitters[i], "1 Invalid emitter of maker asset.");
+            require(assets[_maker_assets[i]].metadata.data == offers[_maker].my_assets_data[i], "1 Invalid data of maker asset.");
         }
-        for (uint i = 0; i < offers[_offer_id].their_assets.length; i++) {
-            require(
-                assets[offers[_offer_id].their_assets[i]].owner == msg.sender,
-                "You no longer own mentioned assets."
-            );
-            setAssetOwner(
-                offers[_offer_id].their_assets[i],
-                offers[_offer_id].sender
-            );
+        for(uint i = 0; i < offers[_taker].my_assets_emitters.length; i++) {
+            require(assets[_taker_assets[i]].owner == offers[_taker].sender, "2 Invalid ownership of taker assets.");
+            require(assets[_taker_assets[i]].metadata.emitter == offers[_taker].my_assets_emitters[i], "2 Invalid emitter of taker asset.");
+            require(assets[_taker_assets[i]].metadata.data == offers[_taker].my_assets_data[i], "2 Invalid data of taker asset.");
         }
-        offers[_offer_id].state = TradeOfferState.ACCEPTED;
-        emit TradeOfferModify(_offer_id, TradeOfferState.ACCEPTED);
-    }
-
-    // Declines a TradeOffer with given id
-    function declineTradeOffer(uint _offer_id) external {
-        require(
-            offers[_offer_id].recipient == msg.sender,
-            "You are not the recipient of given trade offer."
-        );
-        require(
-            offers[_offer_id].state == TradeOfferState.PENDING,
-            "This offer is not pending."
-        );
-        offers[_offer_id].state = TradeOfferState.DECLINED;
-        emit TradeOfferModify(_offer_id, TradeOfferState.DECLINED);
+        for(uint i = 0; i < offers[_maker].their_assets_emitters.length; i++) {
+            require(assets[_taker_assets[i]].owner == offers[_taker].sender, "3 Invalid ownership of maker assets.");
+            require(assets[_taker_assets[i]].metadata.emitter == offers[_taker].their_assets_emitters[i], "3 Invalid emitter of maker asset.");
+            require(assets[_taker_assets[i]].metadata.data == offers[_taker].their_assets_data[i], "3 Invalid data of maker asset.");
+        }
+        for(uint i = 0; i < offers[_taker].their_assets_emitters.length; i++) {
+            require(assets[_maker_assets[i]].owner == offers[_maker].sender, "4 Invalid ownership of taker assets.");
+            require(assets[_maker_assets[i]].metadata.emitter == offers[_maker].their_assets_emitters[i], "4 Invalid emitter of taker asset.");
+            require(assets[_maker_assets[i]].metadata.data == offers[_maker].their_assets_data[i], "4 Invalid data of taker asset.");
+        }
+        for(uint i = 0; i < _maker_assets.length; i++) {
+            setAssetOwner(i, offers[_taker].sender);
+        }
+        for(uint i = 0; i < _taker_assets.length; i++) {
+            setAssetOwner(i, offers[_maker].sender);
+        }
+        offers[_maker].state = TradeOfferState.TAKEN;
+        emit TradeOfferModify(_maker, TradeOfferState.TAKEN);
+        offers[_taker].state = TradeOfferState.TAKEN;
+        emit TradeOfferModify(_taker, TradeOfferState.TAKEN);
     }
     
     function getMyInventory() external view returns (uint[] memory) {
@@ -251,18 +256,20 @@ contract GlobalTradeSystem {
     }
 
     function getMyOffers() external view returns(uint[] memory) {
-        uint[] memory _offers = new uint[](inboxedTradeOffers[address(0)].length + inboxedTradeOffers[msg.sender].length);
-
-        // append addressed offers 
+        uint[] memory _offers = new uint[](inboxedTradeOffers[msg.sender].length);
 
         for(uint i = 0; i < inboxedTradeOffers[msg.sender].length; i++) {
             _offers[i] = inboxedTradeOffers[msg.sender][i];
         }
-        
-        // append public offers
 
-        for(uint i = 0; i < inboxedTradeOffers[address(0)].length; i++) {
-            _offers[inboxedTradeOffers[msg.sender].length + i - 1] = inboxedTradeOffers[address(0)][i];
+        return _offers;
+    }
+
+    function getMyOutboxingTradeOffers() external view returns(uint[] memory) {
+        uint[] memory _offers = new uint[](outboxedTradeOffers[msg.sender].length);
+
+        for(uint i = 0; i < inboxedTradeOffers[msg.sender].length; i++) {
+            _offers[i] = inboxedTradeOffers[msg.sender][i];
         }
 
         return _offers;
