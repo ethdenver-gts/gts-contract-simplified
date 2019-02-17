@@ -17,7 +17,7 @@ contract GlobalTradeSystem {
     // Defines a single asset metadata
     struct AssetMetadata {
         address emitter; // address of the trusted third party who emitted the asset
-        bytes32 data;            // defines asset's metadata. Format [int, json, keccak256]
+        bytes data;            // defines asset's metadata. Format [int, json, keccak256]
     }
     
     // Defines that asset with certain metadata is owner by someone
@@ -45,7 +45,7 @@ contract GlobalTradeSystem {
         uint id,                 // asset id stored in global mapping
         address owner,        // address of user whom an asset has been assigned
         address emitter, // address which emitted the asset
-        bytes32 data             // data associated with the asset
+        bytes data             // data associated with the asset
     );
 
     // Event which fires when an asset is burned
@@ -107,7 +107,7 @@ contract GlobalTradeSystem {
     function getAsset(uint _id) external view returns(
         address owner,
         address emitter,
-        bytes32 data
+        bytes memory data
     ) {
         return (assets[_id].owner, assets[_id].metadata.emitter, assets[_id].metadata.data);
     }
@@ -134,7 +134,7 @@ contract GlobalTradeSystem {
     // ------------------------------------------------------------------------------------------ //
 
     // Assigns a new asset to given address
-    function assign(address _owner, bytes32 _data) external {
+    function assign(address _owner, bytes calldata _data) external {
         last_asset_id++;
         assetCount[_owner]++;
         assets[last_asset_id] = Asset(_owner, AssetMetadata(msg.sender, _data));
