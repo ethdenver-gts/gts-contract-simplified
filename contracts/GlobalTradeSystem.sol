@@ -253,31 +253,11 @@ contract GlobalTradeSystem {
     }
 
     function getMyReceivedTradeOffers() external view returns(uint[] memory) {
-        uint[] memory _offers = new uint[](receivedTradeOffers[address(0)].length + receivedTradeOffers[msg.sender].length);
-
-        // append addressed offers 
-
-        for(uint i = 0; i < receivedTradeOffers[msg.sender].length; i++) {
-            _offers[i] = receivedTradeOffers[msg.sender][i];
-        }
-        
-        // append public offers
-
-        for(uint i = 0; i < receivedTradeOffers[address(0)].length; i++) {
-            _offers[receivedTradeOffers[msg.sender].length + i - 1] = receivedTradeOffers[address(0)][i];
-        }
-
-        return _offers;
+        return receivedTradeOffers[msg.sender];
     }
 
     function getMySentTradeOffers() external view returns(uint[] memory) {
-        uint[] memory _offers = new uint[](sentTradeOffers[msg.sender].length);
-
-        for(uint i = 0; i < receivedTradeOffers[msg.sender].length; i++) {
-            _offers[i] = receivedTradeOffers[msg.sender][i];
-        }
-
-        return _offers;
+        return sentTradeOffers[msg.sender];
     }
     
     function getUserInventory(address user) external view returns (uint[] memory) {
